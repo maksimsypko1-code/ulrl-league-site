@@ -539,12 +539,84 @@ function teamCrest(name){const t=data.teams.find(x=>normalizedName(x.name)===nor
 function safeHexColor(v,fallback){return /^#[0-9a-f]{6}$/i.test(String(v||''))?String(v):fallback}
 function contrastText(hex){const h=safeHexColor(hex,'#d8ad58').slice(1);const n=parseInt(h,16);return (((n>>16)*299+((n>>8)&255)*587+(n&255)*114)/1000)>=145?'#17130c':'#ffffff'}
 function applicationTeamColors(a){const m=String(a?.message||'').match(/^ULRL_COLORS\|(#[0-9a-f]{6})\|(#[0-9a-f]{6})$/i);return {primary:safeHexColor(a?.primary_color||m?.[1],'#d8ad58'),secondary:safeHexColor(a?.secondary_color||m?.[2],'#171717')}}
+
 function standingsRowsForSeason(tournamentId,seasonId){
- const tournament=data.tournaments.find(t=>t.id===tournamentId);if(!tournament)return [];
- const map=new Map();const add=name=>{if(!name)return null;if(!map.has(name))map.set(name,{name,played:0,wins:0,losses:0,diff:0,points:0});return map.get(name)};
- data.teams.filter(t=>String(t.league||'')===String(tournament.name||'')).forEach(t=>add(t.name));
- data.matches.filter(m=>matchTournamentId(m)===tournamentId&&matchSeasonId(m)===seasonId&&seriesComplete(m)&&(!m.phase||m.phase==='Регулярний сезон')).forEach(m=>{const h=add(m.home),a=add(m.away),hs=Number(m.homeScore),as=Number(m.awayScore);if(!h||!a)return;h.played++;a.played++;h.diff+=hs-as;a.diff+=as-hs;if(hs>as){h.wins++;h.points+=3;a.losses++;}else if(as>hs){a.wins++;a.points+=3;h.losses++;}});
- return [...map.values()].sort((a,b)=>b.points-a.points||b.diff-a.diff||b.wins-a.wins||a.name.localeCompare(b.name));
+  const tournament=data.tournaments.find(t=>t.id===tournamentId);
+  if(!tournament)return [];
+
+  const teams=data.teams.filter(
+    t=>String(t.league||'')===String(tournament.name||'')
+  );
+
+  const completedMatches=data.matches.filter(
+    m=>matchTournamentId(m)===tournamentId&&
+       matchSeasonId(m)===seasonId&&
+       seriesComplete(m)&&
+       (!m.phase||m.phase==='Регулярний сезон')
+  );
+
+  // Якщо матчів ще немає — показуємо ручну таблицю з редактора
+  if(!completedMatches.length){
+    return teams.map(t=>({
+      name:t.name,
+      played:Number(t.played||0),
+      wins:Number(t.wins||0),
+      losses:Number(t.losses||0),
+      diff:Number(t.diff||0),
+      points:Number(t.points||0)
+    })).sort((a,b)=>
+      b.points-a.points||
+      b.diff-a.diff||
+      b.wins-a.wins||
+      a.name.localeCompare(b.name)
+    );
+  }
+
+  // Якщо матчі завершені — формуємо таблицю за їх результатами
+  const map=new Map();
+
+  const add=name=>{
+    if(!name)return null;
+    if(!map.has(name)){
+      map.set(name,{
+        name,played:0,wins:0,losses:0,diff:0,points:0
+      });
+    }
+    return map.get(name);
+  };
+
+  teams.forEach(t=>add(t.name));
+
+  completedMatches.forEach(m=>{
+    const h=add(m.home);
+    const a=add(m.away);
+    const hs=Number(m.homeScore);
+    const as=Number(m.awayScore);
+
+    if(!h||!a)return;
+
+    h.played++;
+    a.played++;
+    h.diff+=hs-as;
+    a.diff+=as-hs;
+
+    if(hs>as){
+      h.wins++;
+      h.points+=3;
+      a.losses++;
+    }else if(as>hs){
+      a.wins++;
+      a.points+=3;
+      h.losses++;
+    }
+  });
+
+  return [...map.values()].sort((a,b)=>
+    b.points-a.points||
+    b.diff-a.diff||
+    b.wins-a.wins||
+    a.name.localeCompare(b.name)
+  );
 }
 function standings(league='Усі',short=false){
  let ts;
